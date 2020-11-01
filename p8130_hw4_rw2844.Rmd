@@ -1,0 +1,191 @@
+---
+title: "p8130_hw4_rw2844"
+author: "Renjie Wei"
+date: "10/31/2020"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(arsenal)
+library(animation)
+library(magrittr)
+library(patchwork)
+knitr::opts_chunk$set(
+  fig.height = 6,
+  fig.width = 8,
+  message = F,
+  echo = F,
+  warning = F
+)
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis",
+  digits = 3
+)
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+# Problem 1
+
+
+**__Proof:__**
+$$
+\begin{split}
+\because y_{ij} - \bar{\bar{y}} = (y_{ij}-\bar{y_i}) + (\bar{y_i} - \bar{\bar{y}})\\
+\therefore \sum_j(y_{ij} - \bar{\bar{y}})^2=\sum_j[ (y_{ij}-\bar{y_i}) + (\bar{y_i} - \bar{\bar{y}})]^2 = \sum_j[{ (y_{ij}-\bar{y_i})^2 + (\bar{y_i} - \bar{\bar{y}})^2+2\times (y_{ij}-\bar{y_i})(\bar{y_i} - \bar{\bar{y}})}]\\
+\because \sum_j y_{ij}/n_j = \bar{y_i},~and~\sum_j 1= n_j\\
+\therefore \sum_j{(y_{ij}-\bar{y_i})(\bar{y_i} - \bar{\bar{y}})}= \sum_j [y_{ij}\times \bar{y_i} - y_{ij}\times \bar{\bar{y}} - \bar{y_i}^2 + \bar{y_i}\times \bar{\bar{y}}]\\
+=n_j\times \bar{y_i}^2 -  n_j\times \bar{y_i}\times \bar{\bar{y}} - n_j\times \bar{y_i}^2 + n_j\times \bar{y_i}\times \bar{\bar{y}}\\
+= (n_j\times \bar{y_i}^2 -  n_j\times \bar{y_i}^2) + ( n_j\times \bar{y_i}\times \bar{\bar{y}}- n_j\times \bar{y_i}\times \bar{\bar{y}})= 0
+\end{split}
+$$
+
+Then, we can prove that:
+
+$$ \sum_i\sum_j(y_{ij} - \overline{\bar{y}})^2 = \sum_i\sum_j(y_{ij}-\bar{y_i})^2 + (\bar{y_i} - \overline{\bar{y}})^2$$
+
+# Problem 2
+
+
+
+## 1
+
+```{r prob_2_setting}
+
+my_controls <- tableby.control(
+               total = F,
+               test=F,  
+               numeric.stats = c("meansd", "medianq1q3", "range","Nmiss2"),
+               cat.stats = c("countpct","Nmiss2"),
+               stats.labels = list(
+               meansd = "Mean (SD)",
+               medianq1q3 = "Median (Q1, Q3)",
+               range = "Min - Max",
+               Nmiss2 = "Missing",
+               countpct = "N (%)"))
+
+```
+```{r prob2_plot}
+knee_df =
+  read.csv("./data/Knee.csv") %>% 
+  pivot_longer(
+    cols = Below:Above,
+    names_to = "physical_status",
+    values_to = "rehabitation_days"
+  ) %>% 
+  janitor::clean_names() %>% 
+  mutate(
+    physical_status = forcats::fct_relevel(physical_status,"Below","Average","Above"))
+
+tab1 <- tableby( physical_status~ rehabitation_days , data=knee_df, control=my_controls)
+sum_tab = summary(tab1, title = "Descriptive Statistics: Knee data (Days)",  text=T)
+
+sum_tab %>% knitr::kable()
+knee_df %>% 
+  ggplot(aes(x = physical_status, y = rehabitation_days, fill  = physical_status))+
+  geom_boxplot(alpha = 0.5)
+```
+
+
+**Comments:**
+
+
+## 2
+
+
+```{r prob2_anova}
+knee_anova =
+  aov(rehabitation_days~physical_status, data = knee_df, alpha = 0.01)
+summary(knee_anova)
+qf(0.99,2,22)
+```
+
+
+## 3
+
+```{r prob2_pairwise}
+bonf =
+  pairwise.t.test(
+    knee_df$rehabitation_days,
+    knee_df$physical_status,
+    p.adjust.method = "bonferroni"
+    )
+
+show(bonf)
+
+tukey =
+  TukeyHSD(knee_anova)
+
+show(tukey)
+
+plot(tukey)
+```
+
+
+## 4
+
+
+
+
+
+
+# Problem 3
+
+## 1
+
+We are going to compare the proportions between 3 different groups---- Major swelling, Minor swelling and No swelling. We should create a $R\times C$ Contingency table and conduct a Chi-Squared test of homogeneity.
+
+## 2
+```{r}
+swell_df =
+  matrix(
+    c(54,16,42,32,134,142),ncol = 3,
+    dimnames = list(
+      c("Vaccine","Placebo"),
+      c("Major","Minor","No")
+         )
+    )
+## Table for Observed values
+swell_df %>% 
+  as_tibble() %>% 
+  knitr::kable(caption = "Observed Values")
+chisq_swell =
+  chisq.test(swell_df)
+
+c## Table for Expect values
+chisq_swell$expected %>% 
+  as_tibble() %>% 
+  knitr::kable(caption = "Expected Values")
+```
+
+## 3
+
+Now we are going to use Chi-Square test:
+
+$$
+\begin{split}
+H_0:p_{1j} =p_{2j}=...=p_{5j}=p_{.j},i=1,2,~j=1,2,3, the~proportions~of~different~swelling~conditions~are~the~same~among~vaccine~and~placebo~groups\\
+H_1: p_{ij}\neq p_{i'j},~j=1,2,3,i\neq i', ~not~all~vote~rates~are~equal\\
+\chi^2_{stat} = \sum_i^{R}\sum_j^{C}\frac{(O_{ij}-E_{ij})^2}{E_{ij}} \sim \chi^2_{ (R-1)\times(C-1)},where~df = (R-1)\times(C-1)=1\times 2 = 2\\
+\chi^2_{stat}=(54-38.3)^2/38.3+(42-40.5)^2/40.5+(134-151)^2/151+(16-31.7)^2/31.7+(32-33.5)^2/33.5+(142-125)^2/125=`r chisq_swell$statistic`\\
+\chi^2_{crit}=\chi^2_{ (R-1)\times(C-1),1-\alpha}=\chi^2_{ 2,0.95}=`r qchisq(0.95, 2)`
+\end{split}
+$$
+
+**Decision Rule:**
+
+Reject$H_0$ if $\chi^2_{stat}>\chi^2_{crit}$.
+
+Fail to reject $H_0$ otherwise.
+
+
+**Conclusion:**
+
+Since in our situation $\chi^2_{stat}>\chi^2_{crit}$, we reject the null hypothesis at 5% significance level, and conclude that not all the proportions of different swelling conditions are the same among vaccine and placebo group. Or the swelling condition is significantly different between vaccine and placebo group.
+
+
+
