@@ -12,6 +12,7 @@ library(arsenal)
 library(animation)
 library(magrittr)
 library(patchwork)
+library(multcomp)
 knitr::opts_chunk$set(
   fig.height = 6,
   fig.width = 8,
@@ -35,7 +36,7 @@ scale_fill_discrete = scale_fill_viridis_d
 **__Proof:__**
 $$
 \begin{split}
-\because y_{ij} - \bar{\bar{y}} = (y_{ij}-\bar{y_i}) + (\bar{y_i} - \bar{\bar{y}})\\
+\because by~the~definition,~ y_{ij} - \bar{\bar{y}} = (y_{ij}-\bar{y_i}) + (\bar{y_i} - \bar{\bar{y}})\\
 \therefore \sum_j(y_{ij} - \bar{\bar{y}})^2=\sum_j[ (y_{ij}-\bar{y_i}) + (\bar{y_i} - \bar{\bar{y}})]^2 = \sum_j[{ (y_{ij}-\bar{y_i})^2 + (\bar{y_i} - \bar{\bar{y}})^2+2\times (y_{ij}-\bar{y_i})(\bar{y_i} - \bar{\bar{y}})}]\\
 \because \sum_j y_{ij}/n_j = \bar{y_i},~and~\sum_j 1= n_j\\
 \therefore \sum_j{(y_{ij}-\bar{y_i})(\bar{y_i} - \bar{\bar{y}})}= \sum_j [y_{ij}\times \bar{y_i} - y_{ij}\times \bar{\bar{y}} - \bar{y_i}^2 + \bar{y_i}\times \bar{\bar{y}}]\\
@@ -85,52 +86,105 @@ tab1 <- tableby( physical_status~ rehabitation_days , data=knee_df, control=my_c
 sum_tab = summary(tab1, title = "Descriptive Statistics: Knee data (Days)",  text=T)
 
 sum_tab %>% knitr::kable()
+```
+
+
+**Comments:**
+
+From the table, we can see that the Mean of rehabilitation days are different in the three different physical condition groups.
+
+To make it more clear, I made a box plot.
+
+```{r box_plot_descriptive}
 knee_df %>% 
   ggplot(aes(x = physical_status, y = rehabitation_days, fill  = physical_status))+
   geom_boxplot(alpha = 0.5)
 ```
 
 
-**Comments:**
-
-
 ## 2
-
+$$
+\begin{split}
+H_0: \mu_1=\mu_2=\mu_3,~there~is~no~difference~in~mean~of~the~three~physical~condition~groups\\
+H_1: at~least~two~means~are~not~equal\\
+\end{split}
+$$
 
 ```{r prob2_anova}
 knee_anova =
   aov(rehabitation_days~physical_status, data = knee_df, alpha = 0.01)
 summary(knee_anova)
-qf(0.99,2,22)
+anova_crit=qf(0.99,2,22)
 ```
+$$
+\begin{split}
+Between~SS = \sum_{i=1}^k\sum_{j=1}^{n_i}(\bar{y_i} - \bar{\bar{y}})^2=\sum_{i=1}^kn_i\bar{y_i}^2-\frac{y_{..}^2}{n}=(38-31.96)^2+(33-31.96)^2+(23.57-31.96)^2=796\\
+Within~SS = \frac{\sum_{i=1}^k\sum_{j=1}^{n_i}(y_{ij}-\bar{y_i})^2}{n-k}=\sum_{i=1}^k(n_i-1)s_i^2=7\times(5.48)^2+9\times(3.92)^2+6\times(4.20)^2=454\\
+Between~Mean~Square = \frac{Between~SS}{k-1}=398\\
+Within~Mean~Square = \frac{Within~SS}{n-k}=21 \\
+F_{stat} = \frac{Between~Mean~Square}{Within~Mean~Square}=19.3\sim F(k-1,n-k)=F(2,22)\\
+F_{crit} = F_{2,22,0.99}= `r anova_crit`
+\end{split}
+$$
+
+**Decision Rule:**
+
+Reject $H_0$ if $F_{stat}>F_{crit}$
+
+Fail to reject $H_0$ otherwise.
+
+
+
+**Conclusion:**
+
+Since $F_{stat}=19.3> F_{crit}=5.791$, at 1% significance level, we reject the null hypothesis and conclude that at least two of mean rehabilitation days from the 3 physical condition groups are different.
+
 
 
 ## 3
 
-```{r prob2_pairwise}
+This is the Bonferroni adjust pairwise t-test:
+
+```{r prob2_bonf}
+# Bonferroni
 bonf =
   pairwise.t.test(
     knee_df$rehabitation_days,
     knee_df$physical_status,
-    p.adjust.method = "bonferroni"
+    p.adjust.method = "bonferroni",
+    conf.level = 0.99
     )
 
 show(bonf)
+```
 
+
+This is the Tukey's test:
+```{r prob2_tukey}
+##Tukey's
 tukey =
   TukeyHSD(knee_anova)
 
 show(tukey)
-
 plot(tukey)
 ```
+
+This is the Dunnett's test:
+```{r prob2_dunnett}
+##Dunnet
+summary(glht(knee_anova), linfct = mcp(Group = "Dunnett"))
+```
+
+**Comments:**
+
+* **Similarities:** All these three test are multiple comparisons adjustment methods. They are used to find out which two groups are different in mean.
+
+* **Differences:** Tukey's method is less conservative than Bonferroni, which means it has a less p-values. And Dunnett's method need to define a control arm before the test.
 
 
 ## 4
 
-
-
-
+The total mean of the days of rehabilitation is 31.96 days. And by using an ANOVA, we found that the rehabilitation days are not all the same between three different physical condition groups at 1% significance level, whereas whom with below average physical status takes 38 days, whom with average takes 33 days compared with 23 days in above average group. After multiple comparisons, we confirm the conclusion and we reject that the patients begin with different physical conditions need the same recover time.
 
 
 # Problem 3
@@ -152,14 +206,20 @@ swell_df =
 ## Table for Observed values
 swell_df %>% 
   as_tibble() %>% 
+  mutate(Groups =c("Vaccine","Placebo")) %>% 
+  relocate(Groups) %>%
   knitr::kable(caption = "Observed Values")
 chisq_swell =
   chisq.test(swell_df)
 
-c## Table for Expect values
+## Table for Expect values
 chisq_swell$expected %>% 
   as_tibble() %>% 
+  mutate(Groups =c("Vaccine","Placebo")) %>% 
+  relocate(Groups) %>% 
   knitr::kable(caption = "Expected Values")
+
+p_chi =chisq_swell$p.value
 ```
 
 ## 3
@@ -182,10 +242,18 @@ Reject$H_0$ if $\chi^2_{stat}>\chi^2_{crit}$.
 
 Fail to reject $H_0$ otherwise.
 
+And the p-value is:
+$$
+\begin{split}
+p-value
+= \int_{x^2}^\infty2*{Z^2}=\int_{x^2}^\infty{\frac{1}{\pi}e^{-s^2}}ds\\
+=e^{-x^2/2}=`r p_chi`
+\end{split}
+$$
 
 **Conclusion:**
 
-Since in our situation $\chi^2_{stat}>\chi^2_{crit}$, we reject the null hypothesis at 5% significance level, and conclude that not all the proportions of different swelling conditions are the same among vaccine and placebo group. Or the swelling condition is significantly different between vaccine and placebo group.
+Since in our situation $\chi^2_{stat}>\chi^2_{crit}$, and the p-value is $`r p_chi`$we reject the null hypothesis at 5% significance level, and conclude that not all the proportions of different swelling conditions are the same among vaccine and placebo group. Or the swelling condition is significantly different between vaccine and placebo group.
 
 
 
