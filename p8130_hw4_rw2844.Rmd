@@ -2,7 +2,7 @@
 title: "p8130_hw4_rw2844"
 author: "Renjie Wei"
 date: "10/31/2020"
-output: html_document
+output: pdf_document
 ---
 
 
